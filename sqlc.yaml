@@ -1,0 +1,77 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: server/core/database/queries
+    gen:
+      go:
+        package: gen
+        out: server/core/database/gen
+        sql_package: pgx/v5
+        emit_json_tags: true
+        emit_pointers_for_null_types: true
+        emit_empty_slices: true
+        emit_result_struct_pointers: false
+        json_tags_case_style: camel
+
+        # Os overrides existem para que o tipo certo no banco nao vire um tipo
+        # esquisito no JSON. Sem eles o contrato HTTP mudaria.
+        overrides:
+          # uuid -> string: e o que o cliente ja recebe e devolve. Usar
+          # uuid.UUID daria o mesmo JSON, mas obrigaria a converter em todo
+          # lugar que hoje trata id como string.
+          - db_type: "uuid"
+            go_type: "string"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              type: "string"
+              pointer: true
+
+          # numeric -> float64. O ganho de numeric esta no banco (soma exata em
+          # `balance = balance + $1`); no transporte o JSON so tem float mesmo,
+          # porque do outro lado ha JavaScript.
+          - db_type: "pg_catalog.numeric"
+            go_type: "float64"
+          - db_type: "pg_catalog.numeric"
+            nullable: true
+            go_type:
+              type: "float64"
+              pointer: true
+
+          # date -> dates.Date, que serializa como "AAAA-MM-DD". Um time.Time
+          # cru sairia "2026-09-01T00:00:00Z" e quebraria as telas.
+          - db_type: "date"
+            go_type:
+              import: "financaspro/server/shared/dates"
+              package: "dates"
+              type: "Date"
+          - db_type: "date"
+            nullable: true
+            go_type:
+              import: "financaspro/server/shared/dates"
+              package: "dates"
+              type: "Date"
+              pointer: true
+
+          # json/jsonb como RawMessage: com []byte o encoding/json serializaria
+          # em base64 e o cliente receberia lixo.
+          - db_type: "pg_catalog.json"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "pg_catalog.json"
+            nullable: true
+            go_type: "encoding/json.RawMessage"
+          - db_type: "jsonb"
+            go_type: "encoding/json.RawMessage"
+          - db_type: "jsonb"
+            nullable: true
+            go_type: "encoding/json.RawMessage"
+
+          - db_type: "pg_catalog.timestamp"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.timestamp"
+            nullable: true
+            go_type:
+              import: "time"
+              type: "Time"
+              pointer: true

@@ -1,0 +1,28 @@
+# Go
+/bin/
+*.test
+*.out
+
+# Node
+node_modules/
+client/dist/
+client/.vite/
+
+# Ambiente
+.env
+.env.local
+
+# Dados em disco — nunca versionar
+storage/uploads/*
+storage/backups/*
+storage/media/*
+!storage/**/.gitkeep
+
+# Certificados
+nginx/certs/*
+!nginx/certs/.gitkeep
+
+.DS_Store
+
+# build do APK (gerado por client/android)
+*.apk

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  O backend ainda so tem IP:porta, sem dominio/TLS (ver
+  docs/decisions no repo do servidor). Isso libera trafego HTTP puro
+  somente para esse host; nada mais no app aceita cleartext.
+  Quando o backend ganhar um dominio com HTTPS, troque o host abaixo
+  e remova cleartextTrafficPermitted, ou apague este arquivo e a
+  referencia em AndroidManifest.xml.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">169.58.45.155</domain>
+    </domain-config>
+</network-security-config>

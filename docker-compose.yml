@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: financaspro
+      POSTGRES_USER: financaspro
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-financaspro123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # healthcheck + depends_on condition: a API so sobe com o banco pronto.
+    # No compose legado a API subia junto e as migracoes podiam falhar.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financaspro -d financaspro"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "9000:9101"
+    environment:
+      DATABASE_URL: postgresql://financaspro:${DB_PASSWORD:-financaspro123}@postgres:5432/financaspro?sslmode=disable
+      # Sem default: o compose falha se JWT_SECRET nao estiver no .env.
+      # O legado tinha um segredo publico embutido aqui.
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      UPLOAD_DIR: /uploads
+      PUBLIC_DIR: /app/public
+      PORT: "9101"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TZ: America/Sao_Paulo
+    volumes:
+      - uploads:/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
