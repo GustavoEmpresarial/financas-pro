@@ -31,7 +31,7 @@ FROM alpine:3.21
 
 # ca-certificates para chamadas HTTPS de saida; tzdata porque as datas de
 # negocio dependem do fuso local (America/Sao_Paulo).
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata su-exec \
  && adduser -D -u 10001 app
 
 WORKDIR /app
@@ -44,7 +44,8 @@ COPY scripts/deploy/entrypoint.sh     /app/entrypoint.sh
 
 RUN chmod +x /app/entrypoint.sh && mkdir -p /uploads && chown -R app /uploads /app
 
-USER app
+# Sem USER app: o entrypoint comeca como root para ajustar o dono de /uploads
+# (volume nomeado novo nasce como root) e so entao cai para "app" com su-exec.
 
 ENV PORT=9101 \
     HOST=0.0.0.0 \
