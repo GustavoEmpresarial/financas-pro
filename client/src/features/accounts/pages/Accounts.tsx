@@ -50,6 +50,18 @@ export default function Accounts() {
   const getTypeColor = (type: string) => ACCOUNT_TYPES.find(t => t.value === type)?.color || "#3b82f6";
 
   async function uploadLogo(file: File): Promise<string | null> {
+    // Mesmo allowlist do servidor (server/modules/upload/service). Validar
+    // aqui evita um upload de 5 MB que so volta 400 — comum no celular, onde
+    // "image/*" deixa escolher HEIC/AVIF, que o backend recusa.
+    const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] ?? "";
+    if (![".png", ".jpg", ".jpeg", ".gif", ".webp"].includes(ext)) {
+      toast.error("Formato não suportado: use PNG, JPG, GIF ou WEBP");
+      return null;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Imagem maior que 10 MB");
+      return null;
+    }
     try {
       const { url } = await API.upload(file, "account-logos");
       return url;
@@ -193,7 +205,7 @@ export default function Accounts() {
                         </div>
                       )}
                       <span className="text-xs text-muted-foreground">{addPreview ? "Alterar logo" : "Logo (opcional)"}</span>
-                      <input type="file" name="logo" accept="image/*" className="hidden" onChange={(e) => {
+                      <input type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) {
                           const reader = new FileReader();
@@ -236,7 +248,7 @@ export default function Accounts() {
                           </div>
                         )}
                         <span className="text-xs text-muted-foreground">{editPreview || editItem.icon ? "Alterar logo" : "Logo (opcional)"}</span>
-                        <input type="file" name="logo" accept="image/*" className="hidden" onChange={(e) => {
+                        <input type="file" name="logo" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => {
                           const f = e.target.files?.[0];
                           if (f) {
                             const reader = new FileReader();
