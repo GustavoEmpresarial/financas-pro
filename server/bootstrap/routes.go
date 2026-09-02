@@ -147,19 +147,62 @@ func (a *App) mountSPA(r chi.Router) {
 		return
 	}
 
+	serveIndex := func(w http.ResponseWriter, req *http.Request) {
+		// index.html nunca pode ficar em cache: e ele que aponta para os
+		// assets com hash. Um browser que reusa um index velho depois de um
+		// deploy pede chunks que nao existem mais — e recebe HTML onde
+		// esperava um modulo (erro de MIME text/html num <script type=module>).
+		w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+		http.ServeFile(w, req, index)
+	}
+
 	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
 		urlPath := strings.TrimPrefix(req.URL.Path, "/")
 		if urlPath == "" {
-			http.ServeFile(w, req, index)
+			serveIndex(w, req)
 			return
 		}
 		// filepath.Join limpa "..", entao um pedido a /../../etc/passwd nao
 		// escapa de PublicDir.
 		candidate := filepath.Join(dir, filepath.Clean("/"+urlPath))
 		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			switch {
+			case strings.HasPrefix(req.URL.Path, "/assets/"):
+				// Nome com hash: muda quando o conteudo muda, pode cachear pra sempre.
+				w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			case req.URL.Path == "/sw.js" || strings.HasSuffix(req.URL.Path, ".webmanifest"):
+				// Service worker e manifest precisam ser revalidados a cada deploy.
+				w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			}
 			http.ServeFile(w, req, candidate)
 			return
 		}
-		http.ServeFile(w, req, index)
+		// Recurso estatico inexistente (chunk de um build antigo, um
+		// .js/.css/.map/imagem): 404 de verdade, nunca o index.html — senao
+		// o browser recebe HTML onde esperava um modulo e o import dinamico
+		// quebra sem mensagem util.
+		if isAssetRequest(req.URL.Path) {
+			http.NotFound(w, req)
+			return
+		}
+		// Caminho sem extensao: rota do router client-side (/transactions,
+		// /accounts, ...). Ai o fallback para a SPA e o comportamento certo.
+		serveIndex(w, req)
 	})
+}
+
+// isAssetRequest diz se o caminho pede um arquivo estatico (e nao uma rota
+// da SPA). Usado para decidir se um 404 vira NotFound de verdade ou cai no
+// index.html.
+func isAssetRequest(p string) bool {
+	if strings.HasPrefix(p, "/assets/") {
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".js", ".mjs", ".css", ".map", ".json", ".txt", ".png", ".jpg",
+		".jpeg", ".gif", ".svg", ".webp", ".avif", ".ico", ".woff", ".woff2",
+		".ttf", ".eot", ".wasm", ".webmanifest":
+		return true
+	}
+	return false
 }

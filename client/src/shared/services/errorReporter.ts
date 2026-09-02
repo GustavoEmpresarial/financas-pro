@@ -97,4 +97,27 @@ export function installGlobalErrorHandlers() {
       context: { unhandledRejection: true },
     });
   });
+
+  // Deploy novo troca o hash dos chunks. Uma aba aberta de antes ainda tem o
+  // index.html velho e, ao navegar para uma rota lazy, pede um chunk que nao
+  // existe mais -> "Failed to fetch dynamically imported module". Recarregar
+  // busca o index.html novo e resolve. O guard evita loop se o chunk sumiu
+  // por outro motivo (servidor fora do ar): recarrega no maximo uma vez.
+  window.addEventListener("vite:preloadError", (event) => {
+    const KEY = "financaspro_chunk_reload";
+    send({
+      level: "warning",
+      message: "Chunk defasado apos deploy; recarregando",
+      context: { vitePreloadError: true },
+    });
+    if (sessionStorage.getItem(KEY)) return;
+    sessionStorage.setItem(KEY, "1");
+    (event as Event & { preventDefault: () => void }).preventDefault();
+    window.location.reload();
+  });
+
+  // Navegacao bem-sucedida limpa o guard, liberando um proximo reload.
+  window.addEventListener("load", () => {
+    setTimeout(() => sessionStorage.removeItem("financaspro_chunk_reload"), 5_000);
+  });
 }
