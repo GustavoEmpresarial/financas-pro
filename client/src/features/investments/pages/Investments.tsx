@@ -27,11 +27,20 @@ const INVEST_TYPES: Record<string, { label: string; icon: typeof PiggyBank; colo
 
 const COLORS = ["#10b981", "#3b82f6", "#6366f1", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316", "#6b7280"];
 
+// Renda fixa em reais (CDB, LCI/LCA, Tesouro) nao tem ticker nem preco unitario:
+// voce aplica um valor e ele rende. Para esses o form esconde o ticker e o
+// "valor atual" vira opcional — em branco, assume o valor investido.
+const FIXED_INCOME_TYPES = ["cdb", "lci", "lca", "tesouro"];
+
 export default function Investments() {
   const { data: investments = [], addInvestment, updateInvestment, deleteInvestment } = useInvestments();
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [formType, setFormType] = useState("");
+  const [formCategory, setFormCategory] = useState("");
+
+  const isFixedIncome = FIXED_INCOME_TYPES.includes(formType) || formCategory === "renda_fixa";
 
   const formatCurrency = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
@@ -71,7 +80,7 @@ export default function Investments() {
       type,
       broker: (form.get("broker") as string) || null,
       amount_invested: parseFloat(form.get("amount_invested") as string),
-      current_value: parseFloat(form.get("current_value") as string),
+      current_value: parseFloat(form.get("current_value") as string) || parseFloat(form.get("amount_invested") as string),
       purchase_date: form.get("purchase_date") as string,
       category: (form.get("category") as string) || null,
       notes: (form.get("notes") as string) || null,
@@ -83,6 +92,8 @@ export default function Investments() {
 
   const openEdit = (inv: any) => {
     setEditing(inv);
+    setFormType(inv.type || "");
+    setFormCategory(inv.category || "");
     setEditOpen(true);
   };
 
@@ -98,22 +109,28 @@ export default function Investments() {
     return Object.values(groups).filter(g => g.value > 0);
   }, [investments]);
 
-  const InvestmentForm = ({ isEdit }: { isEdit?: boolean }) => (
+  // Funcao que retorna JSX, nao um componente aninhado. Como componente, cada
+  // render do pai criava uma identidade nova e o React remontava o form
+  // inteiro, zerando os campos ja digitados a cada troca de Tipo/Categoria.
+  // Inline, os inputs reconciliam por posicao e mantem o estado.
+  const renderFormFields = () => (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Nome *</Label>
           <Input name="name" required placeholder="Ex: CDB 120% CDI" defaultValue={editing?.name || ""} />
         </div>
-        <div className="space-y-2">
-          <Label>Ticker</Label>
-          <Input name="ticker" placeholder="Ex: ITSA4, BOVA11" defaultValue={editing?.ticker || ""} />
-        </div>
+        {!isFixedIncome && (
+          <div className="space-y-2">
+            <Label>Ticker</Label>
+            <Input name="ticker" placeholder="Ex: ITSA4, BOVA11" defaultValue={editing?.ticker || ""} />
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Tipo *</Label>
-          <Select name="type" required defaultValue={editing?.type || ""}>
+          <Select name="type" required value={formType} onValueChange={setFormType}>
             <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
             <SelectContent>
               {Object.entries(INVEST_TYPES).map(([k, v]) => (
@@ -124,7 +141,7 @@ export default function Investments() {
         </div>
         <div className="space-y-2">
           <Label>Categoria</Label>
-          <Select name="category" defaultValue={editing?.category || ""}>
+          <Select name="category" value={formCategory} onValueChange={setFormCategory}>
             <SelectTrigger><SelectValue placeholder="Renda fixa, variável..." /></SelectTrigger>
             <SelectContent>
               <SelectItem value="renda_fixa">Renda Fixa</SelectItem>
@@ -146,12 +163,15 @@ export default function Investments() {
           <CurrencyInput name="amount_invested" required defaultValue={editing?.amountInvested} />
         </div>
         <div className="space-y-2">
-          <Label>Valor Atual (R$) *</Label>
-          <CurrencyInput name="current_value" required defaultValue={editing?.currentValue} />
+          <Label>{isFixedIncome ? "Valor Atual (R$)" : "Valor Atual (R$) *"}</Label>
+          <CurrencyInput name="current_value" required={!isFixedIncome} defaultValue={editing?.currentValue} />
+          {isFixedIncome && (
+            <p className="text-xs text-muted-foreground">Em branco assume o valor investido — atualize quando render.</p>
+          )}
         </div>
       </div>
       <div className="space-y-2">
-        <Label>Data de Aplicação</Label>
+        <Label>{isFixedIncome ? "Data de Aplicação" : "Data de Compra"}</Label>
         <Input name="purchase_date" type="date" required defaultValue={editing?.purchaseDate || format(new Date(), "yyyy-MM-dd")} />
       </div>
       <div className="space-y-2">
@@ -168,7 +188,7 @@ export default function Investments() {
           <h1 className="text-2xl font-bold tracking-tight">Investimentos</h1>
           <p className="text-sm text-muted-foreground">CDB, ações, FIIs, fundos e tesouro direto</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setEditing(null); setFormType(""); setFormCategory(""); } }}>
           <DialogTrigger asChild>
             <Button size="sm"><Plus className="mr-2 h-4 w-4" />Novo Investimento</Button>
           </DialogTrigger>
@@ -178,7 +198,7 @@ export default function Investments() {
               <DialogDescription>Adicione um ativo à sua carteira.</DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <InvestmentForm />
+              {renderFormFields()}
               <Button type="submit" className="w-full" disabled={addInvestment.isPending}>Salvar</Button>
             </form>
           </DialogContent>
@@ -225,7 +245,7 @@ export default function Investments() {
               <BarChart3 className="h-8 w-8 text-muted-foreground" />
             </div>
             <p className="text-sm text-muted-foreground">Nenhum investimento cadastrado</p>
-            <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+            <Button variant="outline" size="sm" onClick={() => { setEditing(null); setFormType(""); setFormCategory(""); setOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" />Adicionar primeiro investimento
             </Button>
           </CardContent>
@@ -324,14 +344,14 @@ export default function Investments() {
       )}
 
       {/* Edit Dialog */}
-      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditing(null); }}>
+      <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) { setEditing(null); setFormType(""); setFormCategory(""); } }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Investimento</DialogTitle>
             <DialogDescription>Altere os dados do ativo.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-4">
-            <InvestmentForm isEdit />
+            {renderFormFields()}
             <Button type="submit" className="w-full" disabled={updateInvestment.isPending}>Salvar alterações</Button>
           </form>
         </DialogContent>
